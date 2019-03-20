@@ -37,6 +37,7 @@
 // To compile the program, the option "-I $(SolutionDir)..\src" was set.
 #include "world/d4c.h"
 #include "world/dio.h"
+#include "world/harvest.h"
 #include "world/matlabfunctions.h"
 #include "world/cheaptrick.h"
 #include "world/stonemask.h"
@@ -70,7 +71,28 @@ typedef struct {
     double **spectrogram;
     double **aperiodicity;
     int fft_size;
+	int number_of_aperiodicities;
 } WorldParameters;
+
+namespace world {
+  const double kPi = 3.1415926535897932384;
+  const double kMySafeGuardMinimum = 0.000000000001;
+  const double kFloorF0 = 35.0;
+  const double kCeilF0 = 750.0;
+  const double kDefaultF0 = 50;
+  const double kLog2 = 0.69314718055994529;
+  // Maximum standard deviation not to be selected as a best f0.
+  const double kMaximumValue = 100000.0;
+// Note to me (fs: 48000)
+// 71 Hz is the limit to maintain the FFT size at 2048.
+// If we use 70 Hz as FLOOR_F0, the FFT size of 4096 is required.
+
+  // for D4C()
+  const int kHanning = 1;
+  const int kBlackman = 2;
+  const double kFrequencyInterval = 5000.0;
+  const double kUpperLimit = 15000.0;
+}  // namespace world
 
 
 namespace {
@@ -117,7 +139,7 @@ namespace {
         // You should not set option.f0_floor to under world::kFloorF0.
         // If you want to analyze such low F0 speech, please change world::kFloorF0.
         // Processing speed may sacrify, provided that the FFT length changes.
-        option.f0_floor = 71.0;
+        option.f0_floor = 30.0;
 
         // You can give a positive real number as the threshold.
         // Most strict value is 0, but almost all results are counted as unvoiced.
@@ -152,6 +174,31 @@ namespace {
         return;
     }
 
+
+void F0EstimationHarvest(double *x, int x_length,
+    WorldParameters *world_parameters) {
+  HarvestOption option = { 0 };
+  InitializeHarvestOption(&option);
+
+  // You can change the frame period.
+  // But the estimation is carried out with 1-ms frame shift.
+  option.frame_period = world_parameters->frame_period;
+  // You can set the f0_floor below world::kFloorF0.
+  option.f0_floor = 40.0;
+  // Parameters setting and memory allocation.
+  world_parameters->f0_length = GetSamplesForHarvest(world_parameters->fs,
+    x_length, world_parameters->frame_period);
+  world_parameters->f0 = new double[world_parameters->f0_length];
+  world_parameters->time_axis = new double[world_parameters->f0_length];
+
+  printf("\nAnalysis\n");
+  DWORD elapsed_time = timeGetTime();
+  Harvest(x, x_length, world_parameters->fs, &option,
+      world_parameters->time_axis, world_parameters->f0);
+  printf("Harvest: %d [msec]\n", timeGetTime() - elapsed_time);
+}
+
+
     /**
      *  Spectral envelope estimation function
      *
@@ -179,7 +226,7 @@ namespace {
         // The default value (71.0) is strongly recommended.
         // On the other hand, setting the lowest F0 of speech is a good choice
         // to reduce the fft_size.
-        option.f0_floor = 71.0;
+        option.f0_floor = 65.0;
 
         // Parameters setting and memory allocation.
         world_parameters->fft_size =
@@ -210,14 +257,15 @@ namespace {
     {
         D4COption option;
         InitializeD4COption(&option);
-
+  int number_of_aperiodicities =
+    static_cast<int>(MyMinDouble(world::kUpperLimit, world_parameters->fs / 2.0 - world::kFrequencyInterval) / world::kFrequencyInterval);
         // Parameters setting and memory allocation.
         world_parameters->aperiodicity = new double *[world_parameters->f0_length];
         for (int i = 0; i < world_parameters->f0_length; ++i) {
             world_parameters->aperiodicity[i] =
                 new double[world_parameters->fft_size / 2 + 1];
         }
-
+  	world_parameters->number_of_aperiodicities = number_of_aperiodicities;
         DWORD elapsed_time = timeGetTime();
         // option is not implemented in this version. This is for future update.
         // We can use "NULL" as the argument.
@@ -282,7 +330,7 @@ int main(int argc, char *argv[])
     // 5.0 ms is the default value.
     // Generally, the inverse of the lowest F0 of speech is the best.
     // However, the more elapsed time is required.
-    world_parameters.frame_period = 5.0;
+    world_parameters.frame_period = 12.5;
 
 
     //---------------------------------------------------------------------------
@@ -290,13 +338,16 @@ int main(int argc, char *argv[])
     //---------------------------------------------------------------------------
 
     // F0 estimation
-    F0Estimation(x, x_length, &world_parameters);
-
+    //F0Estimation(x, x_length, &world_parameters);
+	F0EstimationHarvest(x, x_length, &world_parameters);
     // Spectral envelope estimation
     SpectralEnvelopeEstimation(x, x_length, &world_parameters);
 
     // Aperiodicity estimation by D4C
     AperiodicityEstimation(x, x_length, &world_parameters);
+
+
+
 
     std::cout << "fft size = " << world_parameters.fft_size << std::endl;
 
@@ -325,14 +376,16 @@ int main(int argc, char *argv[])
     }
 
     // write the sampling frequency
-    out_spectrogram.write(reinterpret_cast<const char*>(&world_parameters.fs),
-                 std::streamsize( sizeof(world_parameters.fs) ) );
+    //out_spectrogram.write(reinterpret_cast<const char*>(&world_parameters.fs),
+                 //std::streamsize( sizeof(world_parameters.fs) ) );
 
     // write the sampling frequency
+	/*
     out_spectrogram.write(reinterpret_cast<const char*>(&world_parameters.frame_period),
                  std::streamsize( sizeof(world_parameters.frame_period) ) );
-
+	printf("%lf\n",world_parameters.frame_period);*/
     // write the spectrogram data
+	printf("%d world_parameters.fs\n",world_parameters.fs);
     for (int i=0; i<world_parameters.f0_length; i++)
     {
         out_spectrogram.write(reinterpret_cast<const char*>(world_parameters.spectrogram[i]),

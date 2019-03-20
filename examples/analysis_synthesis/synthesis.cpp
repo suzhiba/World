@@ -124,7 +124,7 @@ namespace {
  */
 int main(int argc, char *argv[])
 {
-    if (argc != 5)
+    if (argc != 7)
     {
         fprintf(stderr, "%s <input_f0_file> <input_spectrum_file> <input_aperiodicity_file> <output_wav_file>\n", argv[0]);
         return EXIT_FAILURE;
@@ -133,15 +133,15 @@ int main(int argc, char *argv[])
     // Define a default filled structures
     WorldParameters world_parameters;
     world_parameters.fs = 0; // this value will be filled when reading the spectrogram file
-    world_parameters.f0_length = filesize(argv[1]) / sizeof(double);
+    world_parameters.f0_length = filesize(argv[3]) / sizeof(double);
     // The first bytes in the spectrogram file contains the sampling frequency and
     // the frame period, so we need to subtract those bytes from the spectrogram size
-    size_t specSize = (size_t) filesize(argv[2]) - sizeof(world_parameters.fs) -
-        sizeof(world_parameters.frame_period);
+    size_t specSize = (size_t) filesize(argv[4]) ;//- sizeof(world_parameters.fs) -
+      //  sizeof(world_parameters.frame_period);
     // Be careful that .sp contains only first half of the spectrum
-    world_parameters.fft_size = ( (specSize / (sizeof(double) * world_parameters.f0_length)) - 1 ) * 2;
+    world_parameters.fft_size =atoi(argv[1]);//( (specSize / (sizeof(double) * world_parameters.f0_length)) - 1 ) * 2;
     std::cout << "fft size = " << world_parameters.fft_size << std::endl;
-
+	world_parameters.fs=atoi(argv[2]);
     // 5.0 ms is the default value.
     // Generally, the inverse of the lowest F0 of speech is the best.
     // However, the more elapsed time is required.
@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
     // Loading
     //---------------------------------------------------------------------------
     // F0 loading
-    std::ifstream is_f0(argv[1], std::ios::binary | std::ios::in);
+    std::ifstream is_f0(argv[3], std::ios::binary | std::ios::in);
     if ( !is_f0.is_open() )
         return false;
 
@@ -177,18 +177,23 @@ int main(int argc, char *argv[])
     is_f0.close();
 
     // Spectrogram loading
-    std::ifstream is_spectrogram(argv[2], std::ios::binary | std::ios::in);
+    std::ifstream is_spectrogram(argv[4], std::ios::binary | std::ios::in);
     if ( !is_spectrogram.is_open() )
         return false;
 
     // read the sampling frequency
+	/*
     is_spectrogram.read(reinterpret_cast<char*>(&world_parameters.fs),
             std::streamsize( sizeof(world_parameters.fs) ) );
+	*/
 
     // read the frame period
+	/*
     is_spectrogram.read(reinterpret_cast<char*>(&world_parameters.frame_period),
             std::streamsize( sizeof(world_parameters.frame_period) ) );
+*/
 
+	world_parameters.frame_period=12.5;
     // read the spectrogram data
     for (int i=0; i<world_parameters.f0_length; i++)
     {
@@ -199,9 +204,10 @@ int main(int argc, char *argv[])
     is_spectrogram.close();
 
     // Aperiodicity loading
-    std::ifstream is_aperiodicity(argv[3], std::ios::binary | std::ios::in);
+    std::ifstream is_aperiodicity(argv[5], std::ios::binary | std::ios::in);
     if ( !is_aperiodicity.is_open() )
         return false;
+
 
     for (int i=0; i<world_parameters.f0_length; i++)
     {
@@ -221,7 +227,7 @@ int main(int argc, char *argv[])
     double *y = new double[y_length];
     for (int i = 0; i < y_length; ++i) y[i] = 0.0;
     WaveformSynthesis(&world_parameters, y);
-    wavwrite(y, y_length, world_parameters.fs, 16, argv[4]);
+    wavwrite(y, y_length, world_parameters.fs, 16, argv[6]);
 
     //---------------------------------------------------------------------------
     // Cleaning part

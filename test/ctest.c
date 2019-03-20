@@ -438,6 +438,24 @@ int main(int argc, char *argv[]) {
       world_parameters.fft_size, world_parameters.f0,
       world_parameters.spectrogram);
 
+
+
+
+	FILE * file = fopen(argv[2], "wb");
+	fwrite(world_parameters.f0, sizeof(double), world_parameters.f0_length, file);
+	fclose(file);
+
+	FILE * fsp = fopen(argv[3], "wb");
+	for  (int i=0; i<world_parameters.f0_length; i++) {
+	  fwrite(world_parameters.spectrogram[i], sizeof(double), world_parameters.fft_size/2+1, fsp);
+	}
+	fclose(fsp);
+
+	FILE * fap = fopen(argv[4], "wb");
+	for  (int i=0; i<world_parameters.f0_length; i++) {
+	  fwrite(world_parameters.aperiodicity[i], sizeof(double), world_parameters.fft_size/2+1, fap);
+	}
+	fclose(fap);
   //---------------------------------------------------------------------------
   // Synthesis part
   // There are three samples in speech synthesis
@@ -445,6 +463,7 @@ int main(int argc, char *argv[]) {
   // 2: Example of real-time synthesis
   // 3: Example of real-time synthesis (Ring buffer is efficiently used)
   //---------------------------------------------------------------------------
+  /*
   char filename[1000];
   // The length of the output waveform
   int y_length = (int)((world_parameters.f0_length - 1) *
@@ -472,7 +491,7 @@ int main(int argc, char *argv[]) {
   if (y != NULL) {
     free(y);
     y = NULL;
-  }
+  }*/
   if (x != NULL) {
     free(x);
     x = NULL;
